@@ -1,0 +1,40 @@
+?start: expr
+
+?expr: comp_expr 
+
+?comp_expr: sum_expr (COMP_OP sum_expr)*
+
+?sum_expr: mul_expr (("+"|"-") mul_expr)*
+
+?mul_expr: unary_expr (("*"|"/") unary_expr)*
+
+?unary_expr: "-" unary_expr
+           | "+" unary_expr
+           | primary
+
+?primary: roll
+        | NUMBER
+        | "(" expr ")"
+
+?roll: dice modifiers*
+
+dice: NUMBER? DIE (NUMBER | "%")
+
+keepdrop: KEEP NUMBER
+
+modifiers: keepdrop | explode | adv_dis | unique 
+
+unique: "u" | "U"
+
+explode: "!"
+
+adv_dis: "adv" | "dis"
+
+DIE: "d" | "D"
+KEEP: "kh" | "kl" | "KH" | "KL"
+
+COMP_OP: ">=" | "<=" | ">" | "<" | "==" | "!="
+
+%import common.INT -> NUMBER
+%import common.WS
+%ignore WS
