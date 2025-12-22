@@ -14,9 +14,9 @@ intents.members = True
 handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
 
 # Cogs 
-COGS = {
-
-}
+COGS = (
+    "cogs.dice"
+)
 
 class Moriza(commands.Bot): 
     def __init__(self):
@@ -28,10 +28,12 @@ class Moriza(commands.Bot):
         
         self.invite_link = os.getenv("INVITE_LINK") 
 
-    
-
 class HelpCommand(commands.HelpCommand):
     pass
 
 bot = Moriza()
+
+for cog in COGS:
+    bot.load_extension(cog)
+
 bot.run(os.dotenv("TOKEN"))
