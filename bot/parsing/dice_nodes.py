@@ -1,7 +1,9 @@
 import os
 import random 
 from enum import Enum
+from .dice_result import RollResult
 
+# Modifier enums
 class roll_mod(Enum):
     NONE = 0
     ADV = 1
@@ -15,8 +17,8 @@ class Number:
     def __init__(self, value):
         self.value = value
 
-    def eval(self):
-        return self.value
+    def evaluate(self):
+        return RollResult(total=self.value, rolls=[self.value], raw_rolls=[self.value])
 
 class Roll:
     def __init__(self, num_dice, sides):
@@ -29,39 +31,61 @@ class Roll:
         self.adv_dis = roll_mod.NONE
         self.keepdrop = None # Tuple, first value is the keep type, second is dice amount
 
-    def eval(self):
+    def evaluate(self):
+        init_results = []
         results = []
         dropped = []
-        for i in range(self.num_dice): 
-            roll = self.roll_dice(self.sides)
-            if self.adv_dis != roll_mod.NONE:
-                roll = self.apply_adv(roll, self.adv_dis)
 
+        # Roll raw results 
+        for i in range(self.num_dice): 
+            init_roll = self.roll_dice(self.sides)
+            if self.adv_dis != roll_mod.NONE:
+                applied_roll = self.apply_adv(init_roll, self.adv_dis) 
+                dropped.append(applied_roll[1])
+                init_results.append(applied_roll[0])
+            else: 
+                init_results.append(init_roll)
+
+        # Apply relevant flags and add to results
         if self.exploding:
-            exploded_rolls = self.explode(results)
+            exploded_rolls = self.explode(init_results)
             results.extend(exploded_rolls)
 
         if self.keepdrop != None: 
-            results = self.drop(results, self.keepdrop[1], self.keepdrop[0])
+            results = self.drop(init_results, self.keepdrop[1], self.keepdrop[0])
 
         if self.unique:
-            results = self.make_unique(results)
+            results = self.make_unique(init_results)
 
-        return 
+        # Calculate final roll from results
+        final_result = 0
+        for x in results: 
+            final_result += x
+        
+        # Create dictionary for modifiers
+        modifiers = {
+            "Exploding": self.exploding,
+            "Unique": self.unique,
+            "Advantage/Disadvantage": self.adv_dis,
+            "Keep/Drop": self.keepdrop 
+        }
+
+        return RollResult(total=final_result, rolls=results, raw_rolls=init_results, dropped=dropped, flags=modifiers)
     
     def roll_dice(sides): 
-        return random.randint(0, sides)
+        return random.randint(1, sides)
 
+    # Apply adv/dis to roll, return tuple w/ second number being the dropped roll
     def apply_adv(self, num, mod):
-        roll = self.roll_dice(self.sides)
-        if roll > num and mod == roll_mod.ADV: 
-            return roll
-        elif roll < num and mod == roll_mod.ADV:
-            return num 
-        elif roll > num and mod == roll_mod.DIS:
-            return num
+        reroll = self.roll_dice(self.sides)
+        if reroll > num and mod == roll_mod.ADV: 
+            return (reroll, num)
+        elif reroll < num and mod == roll_mod.ADV:
+            return (num, reroll) 
+        elif reroll > num and mod == roll_mod.DIS:
+            return (num, reroll)
         else:
-            return roll
+            return (reroll, num) 
 
     def explode(self, rolls): 
         exploded_rolls = []
@@ -101,6 +125,18 @@ class UnaryOp:
     def __init__(self, op, operand):
         self.op = op
         self.operand = operand
+    
+    def evaluate(self):
+        value = self.operand.evaluate()
+        total = 0
+        if self.op == "-":
+            total = -value
+        elif self.op == "+":
+            total = value
+        else:
+            raise ValueError(f"Unknown unary operator: {self.op}")
+        
+        return RollResult(total=total, rolls=[total], raw_rolls=[value])
 
 class BinaryOp:
     def __init__(self, left, op, right):
@@ -108,12 +144,47 @@ class BinaryOp:
         self.op = op
         self.right = right
 
+    def evaluate(self):
+        # Calculate totals
+        left_total = self.left.evalaute().total 
+        right_total = self.right.evaluate().total
+        final_total = 0
+
+        if self.op == "+":
+            final_total = left_total + right_total
+        elif self.op == "-":
+            final_total = left_total - right_total
+        elif self.op == "*":
+            final_total = left_total * right_total
+        elif self.op == "/":
+            final_total = left_total // right_total
+        else:
+            raise ValueError(f"Unknown binary operator: {self.op}")
+        
+        return RollResult(total=final_total, parts=[self.left.evaluate(), self.right.evaluate()], op=self.op)
+
 class CompOp:
     def __init__(self, left, op, right):
         self.left = left
         self.op = op
         self.right = right
+    
+    def evaluate(self):
+        left_total = self.left.evaluate().total
+        right_total = self.right.evaluate().total
+
+        if self.op == ">":
+            return left_total > right_total
+        elif self.op == "<":
+            return left_total < right_total
+        elif self.op == "==":
+            return left_total == right_total
+        else: 
+            raise ValueError(f"Unknown comparison operator: {self.op}")
 
 class Group: 
-    def __init__(self):
-        pass
+    def __init__(self, expr):
+        self.expr = expr
+    
+    def evaluate(self):
+        return self.expr.evaluate() 
