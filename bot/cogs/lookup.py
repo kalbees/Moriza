@@ -79,6 +79,25 @@ class Lookup(commands.Cog):
             color = "#5a43de"
         )
 
+        # Get feat prerequesites 
+        prereq = feat_data["prerequisite"] if feat_data["has_prerequisite"] == True else None
+
+        # Get benefits 
+        if feat_data["benefits"][0] != feat_data["desc"]:
+            benefit_list = [x + "\n" for x in feat_data["benefits"]]
+            benefits = " - ".join(benefit_list)
+        else: 
+            benefits = None
+
+        # Format feat description
+        desc = f"""*{prereq}*\n
+                {feat_data["desc"]}\n
+                {benefits if benefits else None}"""
+
+        embed.description = desc
+
+        return await ctx.send(embed)
+
     # Spells Lookup 
     @commands.Command(name = "spell")
     async def spell_lookup(self, ctx, *, name: str):
